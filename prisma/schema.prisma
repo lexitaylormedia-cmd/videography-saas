@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id           String   @id @default(cuid())
+  clerkOrgId   String?  @unique
+  name         String
+  slug         String   @unique
+  brandingJson Json?
+  settingsJson Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  members       Member[]
+  clients       Client[]
+  invoices      Invoice[]
+  contractTemps ContractTemplate[]
+  contracts     Contract[]
+  shoots        Shoot[]
+  documents     Document[]
+  audits        AuditEvent[]
+}
+
+model Member {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  notes       String?
+  tagsCsv     String? // ← use comma-separated tags instead of String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invoices  Invoice[]
+  contracts Contract[]
+  shoots    Shoot[]
+}
+
+model Invoice {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  clientId        String
+  number          String
+  status          String    @default("draft")
+  issueDate       DateTime  @default(now())
+  dueDate         DateTime?
+  currency        String    @default("USD")
+  subtotalCents   Int       @default(0)
+  taxCents        Int       @default(0)
+  totalCents      Int       @default(0)
+  notes           String?
+  pdfUrl          String?
+  stripeInvoiceId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  items     InvoiceItem[]
+}
+
+model InvoiceItem {
+  id        String @id @default(cuid())
+  invoiceId String
+  title     String
+  qty       Int    @default(1)
+  unitCents Int    @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model ContractTemplate {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  description  String?
+  body         String
+  variablesCsv String? // ← store variables as CSV instead of String[]
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contracts Contract[] // ← back relation
+}
+
+model Contract {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  clientId     String
+  templateId   String? // ← optional id
+  title        String
+  compiledHtml String
+  status       String    @default("draft")
+  signToken    String    @unique
+  signerName   String?
+  signerEmail  String?
+  signedAt     DateTime?
+  pdfUrl       String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  template  ContractTemplate? @relation(fields: [templateId], references: [id]) // ← optional relation
+}
+
+model Shoot {
+  id          String   @id @default(cuid())
+  workspaceId String
+  clientId    String?
+  title       String
+  location    String?
+  start       DateTime
+  end         DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client?   @relation(fields: [clientId], references: [id])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  workspaceId String
+  title       String
+  content     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  entityType  String
+  entityId    String
+  action      String
+  meta        Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
