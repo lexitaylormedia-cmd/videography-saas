@@ -1,121 +1,81 @@
-import { NextResponse } from "next/server";
+// src/app/(app)/invoices/[id]/checkout/route.ts
+import { NextRequest } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
-import { requireOrg } from "@/lib/auth";
 
 export const runtime = "nodejs";
-export const revalidate = 0;
+export const dynamic = "force-dynamic";
 
-const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || "";
-const APP_URL = process.env.APP_URL || "http://localhost:3000";
-
-const stripe = new Stripe(STRIPE_KEY, {}); // no apiVersion → avoids TS mismatch
-
-function calcTotal(inv: any, settings: any) {
-  if (typeof inv?.totalCents === "number") return inv.totalCents;
-  if (typeof inv?.subtotalCents === "number" && typeof inv?.taxCents === "number") {
-    return inv.subtotalCents + inv.taxCents;
+// Create Stripe only when a request hits the route
+function getStripe(): Stripe {
+  const key =
+    process.env.STRIPE_SECRET_KEY || process.env.STRIPE_KEY || "";
+  if (!key) {
+    throw new Error("Stripe is not configured (STRIPE_SECRET_KEY is missing).");
   }
-  try {
-    const items = inv?.itemsJson as any[] | undefined;
-    if (Array.isArray(items) && items.length) {
-      const subtotal = items.reduce((sum, it) => {
-        const priceCents =
-          typeof it?.unitPriceCents === "number"
-            ? it.unitPriceCents
-            : Math.round((Number(it?.unitPrice || 0) * 100) || 0);
-        const qty = Number(it?.quantity || 1);
-        return sum + priceCents * qty;
-      }, 0);
-      const taxRate = Number(settings?.taxRate || 0);
-      const tax = Math.round(subtotal * (taxRate / 100));
-      return subtotal + tax;
-    }
-  } catch {}
-  return 0;
+  // Cast to any to satisfy types across stripe versions
+  return new Stripe(key, { apiVersion: "2024-06-20" } as any);
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  if (!STRIPE_KEY) {
-    return NextResponse.json({ error: "Missing STRIPE_SECRET_KEY" }, { status: 500 });
-  }
-
-  const ws = await requireOrg();
-
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: params.id },
-    include: { client: true },
+export async function GET() {
+  // Simple health hint
+  return Response.json({
+    ok: true,
+    route: "/invoices/[id]/checkout",
+    hint: "POST here with no body to start Stripe Checkout for the invoice.",
   });
-  if (!invoice || invoice.workspaceId !== ws.id) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+}
 
-  // Read JSON or form data; support amountCents or amountDollars
-  const { amountCents } = await readAmount(req);
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const stripe = getStripe();
 
-  const settings = (ws.settingsJson as any) || { taxRate: 0, invoicePrefix: "INV-" };
-  const computed = calcTotal(invoice as any, settings);
-  const amount = amountCents && amountCents > 0 ? amountCents : computed;
+    const invoiceId = params.id;
 
-  if (!amount || amount < 50) {
-    // redirect back with an error query (keeps things simple for forms)
-    return NextResponse.redirect(`${APP_URL}/invoices/${invoice.id}?error=amount`, 303);
-  }
+    const inv = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+    });
+    if (!inv) {
+      return Response.json({ error: "Invoice not found" }, { status: 404 });
+    }
 
-  const number = (invoice as any).number || invoice.id.slice(0, 8);
-  const logoUrl =
-    (ws as any)?.brandingJson?.logoUrl || (settings as any)?.logoUrl || undefined;
+    // itemsJson is stored as array of { description, amount, quantity? }
+    const items: Array<{
+      description: string;
+      amount: number; // in cents
+      quantity?: number;
+    }> = (inv as any).itemsJson || [];
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: invoice.client?.email || undefined,
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: amount,
-          product_data: {
-            name: `Invoice ${number}`,
-            images: logoUrl ? [logoUrl] : [],
-            description: invoice.client?.name ? `Client: ${invoice.client.name}` : undefined,
-          },
-        },
+    const line_items = items.map((i) => ({
+      price_data: {
+        currency: (inv as any).currency || "usd",
+        product_data: { name: i.description || "Line item" },
+        unit_amount: i.amount,
       },
-    ],
-    metadata: {
-      invoiceId: invoice.id,
-      workspaceId: ws.id,
-    },
-    success_url: `${APP_URL}/invoices/${invoice.id}?paid=1`,
-    cancel_url: `${APP_URL}/invoices/${invoice.id}`,
-  });
+      quantity: i.quantity ?? 1,
+    }));
 
-  // With HTML form posts, a redirect is ideal
-  return NextResponse.redirect(session.url as string, 303);
-}
+    // fallback to request origin if APP_URL isn't set
+    const origin =
+      process.env.APP_URL || new URL(req.url).origin;
 
-async function readAmount(req: Request): Promise<{ amountCents?: number }> {
-  // Try JSON first
-  try {
-    const json = await req.json();
-    if (typeof json?.amountCents === "number") return { amountCents: json.amountCents };
-  } catch {}
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items,
+      metadata: { invoiceId },
+      success_url: `${origin}/invoices/${invoiceId}?paid=1`,
+      cancel_url: `${origin}/invoices/${invoiceId}?canceled=1`,
+    });
 
-  // Then try form data
-  try {
-    const form = await req.formData();
-    const centsStr = form.get("amountCents")?.toString();
-    const dollarsStr = form.get("amountDollars")?.toString();
-    if (centsStr) {
-      const n = Number(centsStr);
-      if (!Number.isNaN(n)) return { amountCents: n };
-    }
-    if (dollarsStr) {
-      const d = parseFloat(dollarsStr);
-      if (!Number.isNaN(d)) return { amountCents: Math.round(d * 100) };
-    }
-  } catch {}
-
-  return {};
+    return Response.json({ url: session.url }, { status: 200 });
+  } catch (err: any) {
+    // Never crash the build; return a clear JSON error at runtime.
+    return Response.json(
+      { error: err?.message || "Stripe error" },
+      { status: 500 }
+    );
+  }
 }
