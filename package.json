@@ -4,12 +4,11 @@
   "private": true,
   "engines": { "node": "20.x" },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev",                     
+    "build": "cross-env TURBOPACK=0 NEXT_DISABLE_TURBOPACK=1 next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
-    "vercel-build": "prisma migrate deploy && next build"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@fullcalendar/core": "6.1.15",
@@ -30,6 +29,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.5.0",
     "tailwindcss": "^4",
