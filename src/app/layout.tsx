@@ -15,15 +15,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Use hosted font instead of next/font to avoid lightningcss */}
+        {/* Load Inter via Google Fonts to avoid next/font */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="font-sans">{children}</body>
+      <body>{children}</body>
     </html>
   );
 }
