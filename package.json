@@ -2,11 +2,14 @@
   "name": "videography-saas",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": "20.x" },
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma migrate deploy && next build"
   },
   "dependencies": {
     "@fullcalendar/core": "6.1.15",
@@ -19,7 +22,7 @@
     "prisma": "6.14.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "stripe": "^18.4.0"
+    "stripe": "18.4.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
