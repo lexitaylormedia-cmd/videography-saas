@@ -1,12 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // keep builds going while we stabilize
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
+
+  // Disable LightningCSS (native binding that’s failing on Vercel)
   experimental: {
-    // Turn off LightningCSS minifier to avoid native binding issues on some hosts
     optimizeCss: false,
   },
-  // optional: if you use next/font with remote fonts and see warnings, you can also disable font optimization
+
+  // Optional: if you see any other next/font warnings, you can also disable font opt:
   // optimizeFonts: false,
 };
 
