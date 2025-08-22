@@ -1,29 +1,29 @@
+// src/app/layout.tsx
 import "./globals.css";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Videography Studio",
-  description: "Clients • Invoices • Contracts • Shoots",
+  title: "Your Studio",
+  description: "Videography studio management",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <head>
-        {/* FullCalendar CSS via CDN (no local CSS imports needed) */}
+        {/* Use hosted font instead of next/font to avoid lightningcss */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.15/index.css"
-        />
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@fullcalendar/timegrid@6.1.15/index.css"
         />
       </head>
-      <body className={inter.className + " bg-neutral-100"}>{children}</body>
+      <body className="font-sans">{children}</body>
     </html>
   );
 }
